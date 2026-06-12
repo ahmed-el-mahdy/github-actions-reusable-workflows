@@ -1,0 +1,30 @@
+# Example: How to call from a microservice repo
+# File: .github/workflows/ci-cd.yml in your-service repo
+
+name: My Service | CI/CD
+on:
+  push:
+    branches: [dev, qa, staging, prod]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [dev, qa, staging, prod]
+
+jobs:
+  pipeline:
+    uses: your-org/github-actions-reusable-workflows/.github/workflows/full-pipeline.yml@main
+    with:
+      dotnet-version: "8.0"
+      project-path: "src/MyService.API"
+      test-path: "tests/MyService.Tests"
+      docker-context: "."
+      dockerfile: "dockerfile"
+      service-name: "my-service"
+      k8s-overlay-path: "k8s/overlays"
+      enable-apim-import: true
+      openapi-url: "http://my-service.platform.svc.cluster.local/swagger/v1/swagger.json"
+      api-path: "my-service"
+    secrets: inherit
