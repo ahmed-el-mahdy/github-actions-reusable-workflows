@@ -1,0 +1,166 @@
+name: "Full Pipeline (Build → Docker → Deploy → APIM)"
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        required: false
+        type: string
+        default: "8.0"
+      project-path:
+        required: true
+        type: string
+      test-path:
+        required: false
+        type: string
+        default: ""
+      docker-context:
+        required: false
+        type: string
+        default: "."
+      dockerfile:
+        required: false
+        type: string
+        default: "dockerfile"
+      service-name:
+        required: true
+        type: string
+      k8s-overlay-path:
+        required: false
+        type: string
+        default: "k8s/overlays"
+      enable-apim-import:
+        required: false
+        type: boolean
+        default: false
+      openapi-url:
+        required: false
+        type: string
+        default: ""
+      api-path:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  # ─── Resolve Environment ────────────────────────────────
+  resolve-env:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      acr-login-server: ${{ steps.env.outputs.acr }}
+      aks-cluster: ${{ steps.env.outputs.aks-cluster }}
+      aks-rg: ${{ steps.env.outputs.aks-rg }}
+      apim-name: ${{ steps.env.outputs.apim-name }}
+      apim-rg: ${{ steps.env.outputs.apim-rg }}
+    steps:
+      - name: Map branch to environment
+        id: env
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          AKS_CLUSTER_NAME_DEV: ${{ vars.AKS_CLUSTER_NAME_DEV }}
+          AKS_CLUSTER_NAME_QA: ${{ vars.AKS_CLUSTER_NAME_QA }}
+          AKS_CLUSTER_NAME_STAGING: ${{ vars.AKS_CLUSTER_NAME_STAGING }}
+          AKS_CLUSTER_NAME_PROD: ${{ vars.AKS_CLUSTER_NAME_PROD }}
+          AKS_RESOURCE_GROUP_DEV: ${{ vars.AKS_RESOURCE_GROUP_DEV }}
+          AKS_RESOURCE_GROUP_QA: ${{ vars.AKS_RESOURCE_GROUP_QA }}
+          AKS_RESOURCE_GROUP_STAGING: ${{ vars.AKS_RESOURCE_GROUP_STAGING }}
+          AKS_RESOURCE_GROUP_PROD: ${{ vars.AKS_RESOURCE_GROUP_PROD }}
+          APIM_NAME_DEV: ${{ vars.APIM_NAME_DEV }}
+          APIM_NAME_QA: ${{ vars.APIM_NAME_QA }}
+          APIM_NAME_STAGING: ${{ vars.APIM_NAME_STAGING }}
+          APIM_NAME_PROD: ${{ vars.APIM_NAME_PROD }}
+          APIM_RESOURCE_GROUP_DEV: ${{ vars.APIM_RESOURCE_GROUP_DEV }}
+          APIM_RESOURCE_GROUP_QA: ${{ vars.APIM_RESOURCE_GROUP_QA }}
+          APIM_RESOURCE_GROUP_STAGING: ${{ vars.APIM_RESOURCE_GROUP_STAGING }}
+          APIM_RESOURCE_GROUP_PROD: ${{ vars.APIM_RESOURCE_GROUP_PROD }}
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          case "$BRANCH" in
+            dev)
+              ENV="dev"
+              AKS_CLUSTER="$AKS_CLUSTER_NAME_DEV"
+              AKS_RG="$AKS_RESOURCE_GROUP_DEV"
+              APIM_NAME="$APIM_NAME_DEV"
+              APIM_RG="$APIM_RESOURCE_GROUP_DEV"
+              ;;
+            qa)
+              ENV="qa"
+              AKS_CLUSTER="$AKS_CLUSTER_NAME_QA"
+              AKS_RG="$AKS_RESOURCE_GROUP_QA"
+              APIM_NAME="$APIM_NAME_QA"
+              APIM_RG="$APIM_RESOURCE_GROUP_QA"
+              ;;
+            staging)
+              ENV="staging"
+              AKS_CLUSTER="$AKS_CLUSTER_NAME_STAGING"
+              AKS_RG="$AKS_RESOURCE_GROUP_STAGING"
+              APIM_NAME="$APIM_NAME_STAGING"
+              APIM_RG="$APIM_RESOURCE_GROUP_STAGING"
+              ;;
+            prod)
+              ENV="prod"
+              AKS_CLUSTER="$AKS_CLUSTER_NAME_PROD"
+              AKS_RG="$AKS_RESOURCE_GROUP_PROD"
+              APIM_NAME="$APIM_NAME_PROD"
+              APIM_RG="$APIM_RESOURCE_GROUP_PROD"
+              ;;
+            *)
+              echo "Unsupported deployment branch: $BRANCH" >&2
+              exit 1
+              ;;
+          esac
+          echo "environment=${ENV}" >> "$GITHUB_OUTPUT"
+          echo "acr=${ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "aks-cluster=${AKS_CLUSTER}" >> "$GITHUB_OUTPUT"
+          echo "aks-rg=${AKS_RG}" >> "$GITHUB_OUTPUT"
+          echo "apim-name=${APIM_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apim-rg=${APIM_RG}" >> "$GITHUB_OUTPUT"
+
+  # ─── Build & Test ───────────────────────────────────────
+  build:
+    needs: resolve-env
+    uses: ./.github/workflows/build-test.yml
+    with:
+      dotnet-version: ${{ inputs.dotnet-version }}
+      project-path: ${{ inputs.project-path }}
+      test-path: ${{ inputs.test-path }}
+
+  # ─── Docker Build & Push ────────────────────────────────
+  docker:
+    needs: [resolve-env, build]
+    uses: ./.github/workflows/docker-build-push.yml
+    with:
+      docker-context: ${{ inputs.docker-context }}
+      dockerfile: ${{ inputs.dockerfile }}
+      service-name: ${{ inputs.service-name }}
+      environment: ${{ needs.resolve-env.outputs.environment }}
+      acr-login-server: ${{ needs.resolve-env.outputs.acr-login-server }}
+    secrets: inherit
+
+  # ─── Deploy to AKS ─────────────────────────────────────
+  deploy:
+    needs: [resolve-env, docker]
+    uses: ./.github/workflows/deploy-aks.yml
+    with:
+      environment: ${{ needs.resolve-env.outputs.environment }}
+      service-name: ${{ inputs.service-name }}
+      image-tag: ${{ needs.docker.outputs.image-tag }}
+      k8s-overlay-path: ${{ inputs.k8s-overlay-path }}
+      aks-cluster-name: ${{ needs.resolve-env.outputs.aks-cluster }}
+      aks-resource-group: ${{ needs.resolve-env.outputs.aks-rg }}
+    secrets: inherit
+
+  # ─── APIM Import (optional) ────────────────────────────
+  apim:
+    needs: [resolve-env, deploy]
+    if: inputs.enable-apim-import
+    uses: ./.github/workflows/apim-import.yml
+    with:
+      environment: ${{ needs.resolve-env.outputs.environment }}
+      service-name: ${{ inputs.service-name }}
+      openapi-url: ${{ inputs.openapi-url }}
+      apim-name: ${{ needs.resolve-env.outputs.apim-name }}
+      apim-resource-group: ${{ needs.resolve-env.outputs.apim-rg }}
+      api-path: ${{ inputs.api-path }}
+    secrets: inherit
