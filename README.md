@@ -21,8 +21,8 @@ Reusable workflow building blocks for .NET services delivered through Azure Cont
 ```mermaid
 flowchart LR
     CALLER[Service repository] --> BUILD[Build and test]
-    BUILD --> IMAGE[Build and push image]
-    IMAGE --> SCAN[Trivy gate]
+    BUILD --> IMAGE[Build and publish ACR image]
+    IMAGE --> SCAN[Trivy deployment gate]
     SCAN --> AKS[Deploy to AKS]
     AKS --> APIM[Optional APIM import]
 ```
@@ -94,6 +94,12 @@ These files must remain under `.github/workflows` for GitHub to register `workfl
 ## Status
 
 This is a reusable delivery pattern library. It requires repository variables, Azure identities, a compatible service Dockerfile, and matching Kustomize overlays in the caller.
+
+## Review Gates
+
+Source review: 30 October 2026. The current scan follows image publication; a failing scan stops downstream deployment but does not mean the image never reached the registry. Caller variables, secret permissions, artifact reachability and environment protection must be validated in a non-production consumer.
+
+The jobs demonstrate build/test, scanning, rollout verification and optional APIM import. A failing rollout check is not implemented automatic recovery, an OIDC recommendation is not proof of federated authentication, and API import does not establish correct CORS or public Swagger-server behavior for every consumer.
 
 ## Experience Connection
 
