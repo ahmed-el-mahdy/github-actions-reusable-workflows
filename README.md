@@ -94,3 +94,13 @@ These files must remain under `.github/workflows` for GitHub to register `workfl
 ## Status
 
 This is a reusable delivery pattern library. It requires repository variables, Azure identities, a compatible service Dockerfile, and matching Kustomize overlays in the caller.
+
+## Experience Connection
+
+These callable examples demonstrate reusable delivery building blocks; they do not prove that every scan, test or recovery control is deployed in an employer's pipeline.
+
+- [Workflow-standardization story](https://github.com/ahmed-el-mahdy/Career-Advance/blob/main/progress/STAR-ANSWERS.md#star-6-cicd-standardization--24-branch-unified-workflow) describes historical six-repository alignment and a later fail-fast source-contract guard.
+- [APIM publishing story](https://github.com/ahmed-el-mahdy/Career-Advance/blob/main/progress/STAR-ANSWERS.md#star-5-apim-swagger-ui-self-healing-pipeline) explains durable Swagger operations and a scoped public-server rewrite.
+- [Interview guide](https://github.com/ahmed-el-mahdy/Career-Advance/blob/main/progress/INTERVIEW-PREP.md) distinguishes rollout verification from explicit rollback and post-recovery validation.
+
+Experience material was reviewed on 30 October 2026. A failing rollout check is not an automatic rollback unless the consuming workflow explicitly implements and verifies recovery.
